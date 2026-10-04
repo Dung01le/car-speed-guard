@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Car Speed Guard-XIP - Cảnh Báo Tốc Độ Ô Tô</title>
+  <meta name="theme-color" content="#07090e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Speed Guard-XIP">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="style.css">
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚗</text></svg>">
+</head>
+<body class="dashboard-body">
+
+  <!-- Cảnh báo viền nhấp nháy khi quá tốc độ -->
+  <div id="overspeedAlertOverlay" class="alert-overlay"></div>
+
+  <div class="app-container" id="appContainer">
+
+    <!-- Thanh tiêu đề điều khiển -->
+    <header class="car-header">
+      <div class="brand">
+        <span class="car-icon">🚗</span>
+        <span class="app-title">CAR SPEED GUARD-XIP</span>
+        <span id="gpsBadge" class="status-badge badge-searching">Đang dò GPS...</span>
+      </div>
+      <div class="header-right">
+        <div class="clock-display" id="currentTime">00:00:00</div>
+        <button id="btnHud" class="btn-action btn-hud" title="Chế độ HUD chiếu kính lái">
+          <span class="hud-icon">🪞</span> HUD
+        </button>
+        <button id="btnSound" class="btn-action btn-sound active" title="Bật/Tắt âm thanh cảnh báo">
+          <span class="sound-icon">🔊</span>
+        </button>
+        <button id="btnSettings" class="btn-action" title="Cài đặt">
+          <span>⚙️</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Khu vực hiển thị trung tâm (Speedometer & Speed Limit Sign) -->
+    <main class="dashboard-main">
+      
+      <!-- Cột Đồng hồ tốc độ (Được thu nhỏ tinh gọn) -->
+      <section class="speed-cluster">
+        <div class="speed-circle-wrapper" id="speedWrapper">
+          <svg class="speed-gauge-svg" viewBox="0 0 200 200">
+            <!-- Vòng tròn nền gauge -->
+            <circle class="gauge-bg" cx="100" cy="100" r="85"></circle>
+            <!-- Vòng tròn tiến độ tốc độ -->
+            <circle id="gaugeProgress" class="gauge-bar" cx="100" cy="100" r="85"></circle>
+          </svg>
+          
+          <div class="speed-value-box">
+            <div id="currentSpeed" class="current-speed">0</div>
+            <div class="speed-unit">KM/H</div>
+            <div id="speedStatusText" class="speed-status-text">AN TOÀN</div>
+          </div>
+        </div>
+
+        <!-- Thông tin phụ: Tọa độ & Vị trí -->
+        <div class="geo-info-bar">
+          <span>Vĩ độ: <strong id="geoLat">--</strong></span>
+          <span>Kinh độ: <strong id="geoLng">--</strong></span>
+          <span>Độ cao: <strong id="geoAlt">--</strong> m</span>
+        </div>
+      </section>
+
+      <!-- Cột Biển báo giới hạn tốc độ (Thu nhỏ, 100% Tự động theo thời gian thực) -->
+      <section class="limit-cluster">
+        <div class="auto-gps-badge" id="btnModeAuto" title="Tự động nhận diện tốc độ theo tọa độ GPS thời gian thực">
+          <span class="live-dot"></span>
+          <span>TỰ ĐỘNG GPS LIVE</span>
+        </div>
+
+        <div class="limit-sign-container">
+          <div class="vietnam-speed-sign" id="vietnamSign">
+            <span class="sign-inner-circle">
+              <span id="speedLimitValue" class="sign-number">60</span>
+            </span>
+          </div>
+          <div class="sign-caption">GIỚI HẠN TỐC ĐỘ</div>
+        </div>
+
+        <!-- Tên đoạn đường đang di chuyển nhận diện qua GPS -->
+        <div id="detectedRoadName" class="detected-road-name">
+          📍 Đang định vị đoạn đường...
+        </div>
+      </section>
+
+      <!-- Cột Bản đồ Định vị Xe Thời gian thực (Phóng to chiếm ưu thế) -->
+      <section class="map-cluster" id="mapCluster">
+        <div class="map-card-header">
+          <div class="map-title-box">
+            <span class="map-pulse-dot"></span>
+            <span class="map-title">ĐỊNH VỊ XE TRỰC TIẾP TRÊN BẢN ĐỒ</span>
+          </div>
+          <div class="map-header-actions">
+            <select id="mapSourceSelect" class="map-source-select" title="Chọn loại bản đồ">
+              <option value="google_roadmap">Google Đường bộ</option>
+              <option value="google_hybrid">Google Vệ tinh</option>
+              <option value="osm">OpenStreetMap</option>
+              <option value="carto_dark">Giao diện Đêm</option>
+            </select>
+            <button id="btnMapFollow" class="btn-map-tool active" title="Tự động bám theo vị trí xe">🎯 Bám xe</button>
+            <button id="btnMapExpand" class="btn-map-tool" title="Phóng to bản đồ toàn màn hình">⛶ Mở rộng</button>
+          </div>
+        </div>
+        <div id="carLiveMap" class="car-live-map"></div>
+        <div class="map-footer-coords">
+          <span id="mapRoadBadge">Đang kết nối GPS...</span>
+          <span id="mapCoordsBadge">16.8188° N, 107.1005° E</span>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Thanh thống kê chuyến đi (Trip Summary Bar) -->
+    <footer class="trip-summary-bar">
+      <div class="stat-card">
+        <div class="stat-label">QUÃNG ĐƯỜNG</div>
+        <div class="stat-val"><span id="tripDistance">0.0</span> <small>km</small></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">TỐC ĐỘ MAX</div>
+        <div class="stat-val"><span id="tripMaxSpeed">0</span> <small>km/h</small></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">TỐC ĐỘ TB</div>
+        <div class="stat-val"><span id="tripAvgSpeed">0</span> <small>km/h</small></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">THỜI GIAN</div>
+        <div class="stat-val" id="tripDuration">00:00:00</div>
+      </div>
+      <div class="stat-card stat-alert">
+        <div class="stat-label">VƯỢT TỐC ĐỘ</div>
+        <div class="stat-val"><span id="tripViolations">0</span> <small>lần</small></div>
+      </div>
+      <div class="stat-actions">
+        <button id="btnTripControl" class="btn-trip btn-trip-start">▶ Bắt Đầu Chuyến</button>
+        <button id="btnViewHistory" class="btn-trip btn-trip-history">📜 Nhật Ký</button>
+      </div>
+    </footer>
+
+    <!-- Khối Thông Tin Liên Hệ Bản Quyền Tác Giả Lê Viết Dũng -->
+    <div class="author-contact-bar">
+      <div class="author-name">Phần mềm: <strong>Car Speed Guard-XIP</strong> | Phát triển bởi: <strong>Lê Viết Dũng</strong></div>
+      <div class="author-details">
+        <span>📞 SĐT: <a href="tel:0983890250">0983890250</a></span>
+        <span>✉️ Email: <a href="mailto:Dungxip2008@gmail.com">Dungxip2008@gmail.com</a></span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Modal Nhật ký chuyến đi & Vi phạm (Tuân thủ min-width: 0 và max-height: 60vh) -->
+  <div id="historyModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>📜 NHẬT KÝ CHUYẾN ĐI & LỊCH SỬ VƯỢT TỐC ĐỘ</h2>
+        <button class="modal-close" id="btnCloseHistory">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="tabViolations">Sự Kiện Vượt Tốc Độ</button>
+          <button class="tab-btn" data-tab="tabTrips">Danh Sách Chuyến Đi</button>
+        </div>
+        <div id="tabViolations" class="tab-content active">
+          <div class="table-scroll-container">
+            <table class="data-table" id="violationsTable">
+              <thead>
+                <tr>
+                  <th>Thời gian</th>
+                  <th>Tốc độ đo</th>
+                  <th>Giới hạn</th>
+                  <th>Vượt quá</th>
+                  <th>Tọa độ GPS</th>
+                </tr>
+              </thead>
+              <tbody id="violationsTableBody">
+                <tr><td colspan="5" class="text-center">Chưa có vi phạm nào. Bạn lái xe rất an toàn!</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div id="tabTrips" class="tab-content">
+          <div class="table-scroll-container">
+            <table class="data-table" id="tripsTable">
+              <thead>
+                <tr>
+                  <th>Bắt đầu</th>
+                  <th>Kết thúc</th>
+                  <th>Quãng đường</th>
+                  <th>Tốc độ Max</th>
+                  <th>Tốc độ TB</th>
+                  <th>Số lần vượt</th>
+                </tr>
+              </thead>
+              <tbody id="tripsTableBody">
+                <tr><td colspan="6" class="text-center">Chưa có lịch sử chuyến đi nào.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Cài đặt cấu hình -->
+  <div id="settingsModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>⚙️ CẤU HÌNH CẢNH BÁO TỐC ĐỘ</h2>
+        <button class="modal-close" id="btnCloseSettings">&times;</button>
+      </div>
+      <div class="modal-body form-body">
+        <div class="form-group">
+          <label>Khoảng cảnh báo sớm trước ngưỡng (km/h):</label>
+          <input type="number" id="settingWarningBuffer" min="1" max="15" value="5">
+          <small class="hint">Ví dụ: Giới hạn 60 km/h, cảnh báo sớm từ 55 km/h.</small>
+        </div>
+        <div class="form-group-checkbox">
+          <label><input type="checkbox" id="settingVoiceAlert" checked> Bật giọng nói tiếng Việt cảnh báo</label>
+        </div>
+        <div class="form-group-checkbox">
+          <label><input type="checkbox" id="settingBeepAlert" checked> Bật tiếng bíp còi báo động</label>
+        </div>
+        <div class="form-group-checkbox">
+          <label><input type="checkbox" id="settingHighAccuracy" checked> Yêu cầu GPS độ chính xác cao (High Accuracy)</label>
+        </div>
+        <div class="modal-footer">
+          <button id="btnSaveSettings" class="btn-save">Lưu Cài Đặt</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Banner nhắc nhở Kích hoạt App độc lập khi mở trên trình duyệt điện thoại -->
+  <div id="mobileAppPromptBanner" class="mobile-app-prompt-banner" style="display: none;">
+    <div class="prompt-icon">🚗</div>
+    <div class="prompt-info">
+      <div class="prompt-title">KÍCH HOẠT CHẾ ĐỘ APP</div>
+      <div class="prompt-desc">Cài đặt để chạy toàn màn hình, chống tắt màn hình khi lái xe</div>
+    </div>
+    <button id="btnActivateApp" class="btn-activate-app">Kích Hoạt App</button>
+    <button id="btnDismissPrompt" class="btn-dismiss-prompt">&times;</button>
+  </div>
+
+  <!-- Modal hướng dẫn cài đặt App từng bước cho Android / iOS -->
+  <div id="installGuideModal" class="modal">
+    <div class="modal-content modal-guide">
+      <div class="modal-header">
+        <h2>📱 CÁCH KÍCH HOẠT APP TRÊN ĐIỆN THOẠI</h2>
+        <button class="modal-close" id="btnCloseInstallGuide">&times;</button>
+      </div>
+      <div class="modal-body guide-body">
+        <!-- Hướng dẫn cho Android -->
+        <div class="guide-platform-card android-card">
+          <div class="platform-header">
+            <span class="platform-badge">Android / Màn hình Ô tô</span>
+            <span class="browser-name">Trình duyệt Google Chrome</span>
+          </div>
+          <ol class="guide-steps">
+            <li>Nhấn vào biểu tượng <strong>3 chấm dọc ⋮</strong> ở góc trên bên phải Chrome.</li>
+            <li>Chọn mục <strong>"Cài đặt ứng dụng"</strong> hoặc <strong>"Thêm vào Màn hình chính"</strong>.</li>
+            <li>Xác nhận <strong>Cài đặt</strong>. Biểu tượng 🚗 <strong>Speed Guard</strong> sẽ nằm ngay màn hình chính.</li>
+            <li>Mở icon đó để chạy độc lập không có thanh địa chỉ!</li>
+          </ol>
+          <button id="btnNativeInstallPrompt" class="btn-action-install">BẤM VÀO ĐÂY ĐỂ CÀI ĐẶT NGAY</button>
+        </div>
+
+        <!-- Hướng dẫn cho iPhone / iOS -->
+        <div class="guide-platform-card ios-card">
+          <div class="platform-header">
+            <span class="platform-badge">iPhone / iPad</span>
+            <span class="browser-name">Trình duyệt Safari</span>
+          </div>
+          <ol class="guide-steps">
+            <li>Nhấn nút <strong>Chia sẻ (biểu tượng ô vuông có mũi tên chỉ lên)</strong> ở thanh dưới cùng.</li>
+            <li>Cuộn xuống danh sách và chọn <strong>"Thêm vào MH chính"</strong> (Add to Home Screen).</li>
+            <li>Bấm <strong>Thêm</strong> ở góc trên bên phải.</li>
+            <li>Mở icon <strong>Speed Guard</strong> từ màn hình chính để dùng như ứng dụng App Store!</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="speed_engine.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
