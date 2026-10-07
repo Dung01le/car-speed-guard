@@ -1,0 +1,525 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Car Speed Guard-XIP - Cảnh Báo Tốc Độ Ô Tô</title>
+  <meta name="theme-color" content="#07090e">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Speed Guard-XIP">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css">
+  <link rel="stylesheet" href="style.css">
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🚗</text></svg>">
+</head>
+<body class="dashboard-body">
+
+  <!-- Cảnh báo viền nhấp nháy khi quá tốc độ -->
+  <div id="overspeedAlertOverlay" class="alert-overlay"></div>
+
+  <!-- Màn hình Khóa An Ninh Bản Quyền (Security Gate - Chỉ chủ nhân được cấp quyền mới vào được) -->
+  <div id="securityGateModal" class="security-gate-overlay">
+    <div class="security-card">
+      <div class="security-icon">🔒</div>
+      <h2 class="security-title">CAR SPEED GUARD-XIP</h2>
+      <p class="security-subtitle">Phần mềm nội bộ | Tác giả: <strong>Lê Viết Dũng</strong></p>
+      <div class="security-notice">Ứng dụng được cài đặt chế độ <strong>RIÊNG TƯ (ONLY)</strong>. Vui lòng nhập Mã PIN kích hoạt để sử dụng.</div>
+      <div class="security-input-box">
+        <input type="password" id="inputSecurityPin" maxlength="15" placeholder="Nhập mã PIN kích hoạt..." autofocus>
+        <button id="btnUnlockApp" class="btn-unlock">Mở Khóa 🚗</button>
+      </div>
+      <div id="securityErrorMsg" class="security-error"></div>
+      <div class="security-contact">
+        Liên hệ tác giả để nhận mã: <strong>0983890250</strong> (Lê Viết Dũng)
+      </div>
+    </div>
+  </div>
+
+  <div class="app-container" id="appContainer">
+
+    <!-- Thanh tiêu đề điều khiển -->
+    <header class="car-header">
+      <div class="brand">
+        <span class="car-icon">🚗</span>
+        <span class="app-title">CAR SPEED GUARD-XIP</span>
+        <span id="gpsBadge" class="status-badge badge-searching">Đang dò GPS...</span>
+      </div>
+      <div class="header-right">
+        <div class="clock-display" id="currentTime">00:00:00</div>
+        <button id="btnPinSign" class="btn-action btn-pin-sign" title="Ghi nhận biển báo tốc độ 1 chạm">
+          <span>📍 Báo biển</span>
+        </button>
+        <button id="btnGpsSim" class="btn-action" style="border-color: #00e676; color: #00e676;" title="Giả lập lộ trình GPS để kiểm tra biển báo tốc độ">
+          <span>🧪 Thử GPS</span>
+        </button>
+        <button id="btnHud" class="btn-action btn-hud" title="Chế độ HUD chiếu kính lái">
+          <span class="hud-icon">🪞</span> HUD
+        </button>
+        <button id="btnSound" class="btn-action btn-sound active" title="Bật/Tắt âm thanh cảnh báo">
+          <span class="sound-icon">🔊</span>
+        </button>
+        <button id="btnSettings" class="btn-action" title="Cài đặt">
+          <span>⚙️</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- Khu vực hiển thị trung tâm (Speedometer & Speed Limit Sign) -->
+    <main class="dashboard-main">
+      
+      <!-- Cột Đồng hồ tốc độ (Được thu nhỏ tinh gọn) -->
+      <section class="speed-cluster">
+        <div class="speed-circle-wrapper" id="speedWrapper">
+          <svg class="speed-gauge-svg" viewBox="0 0 200 200">
+            <!-- Vòng tròn nền gauge -->
+            <circle class="gauge-bg" cx="100" cy="100" r="85"></circle>
+            <!-- Vòng tròn tiến độ tốc độ -->
+            <circle id="gaugeProgress" class="gauge-bar" cx="100" cy="100" r="85"></circle>
+          </svg>
+          
+          <div class="speed-value-box">
+            <div id="currentSpeed" class="current-speed">0</div>
+            <div class="speed-unit">KM/H</div>
+            <div id="speedStatusText" class="speed-status-text">AN TOÀN</div>
+          </div>
+        </div>
+
+        <!-- Thông tin phụ: Tọa độ & Vị trí -->
+        <div class="geo-info-bar">
+          <span>Vĩ độ: <strong id="geoLat">--</strong></span>
+          <span>Kinh độ: <strong id="geoLng">--</strong></span>
+          <span>Độ cao: <strong id="geoAlt">--</strong> m</span>
+        </div>
+      </section>
+
+      <!-- Cột Biển báo giới hạn tốc độ (Thu nhỏ, 100% Tự động theo thời gian thực) -->
+      <section class="limit-cluster">
+        <div class="auto-gps-badge" id="btnModeAuto" title="Tự động nhận diện tốc độ theo tọa độ GPS thời gian thực">
+          <span class="live-dot"></span>
+          <span>TỰ ĐỘNG GPS LIVE</span>
+        </div>
+
+        <div class="limit-sign-container">
+          <div class="vietnam-speed-sign" id="vietnamSign">
+            <span class="sign-inner-circle">
+              <span id="speedLimitValue" class="sign-number">50</span>
+            </span>
+          </div>
+          <div class="sign-caption">GIỚI HẠN TỐC ĐỘ</div>
+        </div>
+
+        <!-- Banner cảnh báo Camera phạt nguội tức thì khi đến gần 500m -->
+        <div id="cameraAlertBanner" class="camera-alert-banner" style="display: none;">
+          <div class="cam-badge-icon">📷</div>
+          <div class="cam-badge-info">
+            <div id="cameraAlertTitle" class="cam-badge-title">CAMERA PHẠT NGUỘI</div>
+            <div id="cameraAlertDist" class="cam-badge-dist">Cách 450 mét</div>
+          </div>
+          <div id="cameraAlertSpeed" class="cam-badge-speed">60</div>
+        </div>
+
+        <!-- Tên đoạn đường đang di chuyển nhận diện qua GPS -->
+        <div id="detectedRoadName" class="detected-road-name">
+          📍 Đang định vị đoạn đường...
+        </div>
+
+        <div class="action-buttons-row">
+          <button id="btnQuickPinSign" class="btn-quick-pin" title="Chạm để ghim biển báo tốc độ tại vị trí xe đang đứng">
+            📍 Ghim Biển
+          </button>
+          <button id="btnQuickReportCamera" class="btn-quick-cam" title="Chạm để báo camera phạt nguội tại vị trí xe đang đứng">
+            📷 Báo Camera
+          </button>
+        </div>
+      </section>
+
+      <!-- Cột Bản đồ Định vị Xe Thời gian thực (Phóng to chiếm ưu thế) -->
+      <section class="map-cluster" id="mapCluster">
+        <div class="map-card-header">
+          <div class="map-title-box">
+            <span class="map-pulse-dot"></span>
+            <span class="map-title">ĐỊNH VỊ XE TRỰC TIẾP TRÊN BẢN ĐỒ</span>
+          </div>
+          <div class="map-header-actions">
+            <select id="mapSourceSelect" class="map-source-select" title="Chọn loại bản đồ">
+              <option value="google_roadmap">Google Đường bộ</option>
+              <option value="google_hybrid">Google Vệ tinh</option>
+              <option value="osm">OpenStreetMap</option>
+              <option value="carto_dark">Giao diện Đêm</option>
+            </select>
+            <button id="btnMapFollow" class="btn-map-tool active" title="Tự động bám theo vị trí xe">🎯 Bám xe</button>
+            <button id="btnMapExpand" class="btn-map-tool" title="Phóng to bản đồ toàn màn hình">⛶ Mở rộng</button>
+          </div>
+        </div>
+        <div id="carLiveMap" class="car-live-map"></div>
+        <div class="map-footer-coords">
+          <span id="mapRoadBadge">Đang kết nối GPS...</span>
+          <span id="mapCoordsBadge">16.8188° N, 107.1005° E</span>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- Thanh thống kê chuyến đi (Trip Summary Bar) -->
+    <footer class="trip-summary-bar">
+      <div class="stat-card">
+        <div class="stat-label">QUÃNG ĐƯỜNG</div>
+        <div class="stat-val"><span id="tripDistance">0.0</span> <small>km</small></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">TỐC ĐỘ MAX</div>
+        <div class="stat-val"><span id="tripMaxSpeed">0</span> <small>km/h</small></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">TỐC ĐỘ TB</div>
+        <div class="stat-val"><span id="tripAvgSpeed">0</span> <small>km/h</small></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">THỜI GIAN</div>
+        <div class="stat-val" id="tripDuration">00:00:00</div>
+      </div>
+      <div class="stat-card stat-alert">
+        <div class="stat-label">VƯỢT TỐC ĐỘ</div>
+        <div class="stat-val"><span id="tripViolations">0</span> <small>lần</small></div>
+      </div>
+      <div class="stat-actions">
+        <button id="btnTripControl" class="btn-trip btn-trip-start">▶ Bắt Đầu Chuyến</button>
+        <button id="btnViewHistory" class="btn-trip btn-trip-history">📜 Nhật Ký</button>
+      </div>
+    </footer>
+
+    <!-- Khối Thông Tin Liên Hệ Bản Quyền Tác Giả Lê Viết Dũng -->
+    <div class="author-contact-bar">
+      <div class="author-name">Phần mềm: <strong>Car Speed Guard-XIP</strong> | Phát triển bởi: <strong>Lê Viết Dũng</strong></div>
+      <div class="author-details">
+        <span>📞 SĐT: <a href="tel:0983890250">0983890250</a></span>
+        <span>✉️ Email: <a href="mailto:Dungxip2008@gmail.com">Dungxip2008@gmail.com</a></span>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Modal Nhật ký chuyến đi & Vi phạm (Tuân thủ min-width: 0 và max-height: 60vh) -->
+  <div id="historyModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>📜 NHẬT KÝ CHUYẾN ĐI & LỊCH SỬ VƯỢT TỐC ĐỘ</h2>
+        <button class="modal-close" id="btnCloseHistory">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="tabs">
+          <button class="tab-btn active" data-tab="tabViolations">Sự Kiện Vượt Tốc Độ</button>
+          <button class="tab-btn" data-tab="tabTrips">Danh Sách Chuyến Đi</button>
+        </div>
+        <div id="tabViolations" class="tab-content active">
+          <div class="table-scroll-container">
+            <table class="data-table" id="violationsTable">
+              <thead>
+                <tr>
+                  <th>Thời gian</th>
+                  <th>Tốc độ đo</th>
+                  <th>Giới hạn</th>
+                  <th>Vượt quá</th>
+                  <th>Tọa độ GPS</th>
+                </tr>
+              </thead>
+              <tbody id="violationsTableBody">
+                <tr><td colspan="5" class="text-center">Chưa có vi phạm nào. Bạn lái xe rất an toàn!</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div id="tabTrips" class="tab-content">
+          <div class="table-scroll-container">
+            <table class="data-table" id="tripsTable">
+              <thead>
+                <tr>
+                  <th>Bắt đầu</th>
+                  <th>Kết thúc</th>
+                  <th>Quãng đường</th>
+                  <th>Tốc độ Max</th>
+                  <th>Tốc độ TB</th>
+                  <th>Số lần vượt</th>
+                </tr>
+              </thead>
+              <tbody id="tripsTableBody">
+                <tr><td colspan="6" class="text-center">Chưa có lịch sử chuyến đi nào.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  <!-- Modal Ghim Biển Báo Tốc Độ 1 Chạm -->
+  <div id="pinSignModal" class="modal">
+    <div class="modal-content modal-pin-sign">
+      <div class="modal-header">
+        <h2>📍 GHIM BIỂN BÁO TỐC ĐỘ 1 CHẠM</h2>
+        <button class="modal-close" id="btnClosePinSign">&times;</button>
+      </div>
+      <div class="modal-body pin-sign-body">
+        <p class="pin-hint">Chạm vào biển tốc độ bạn nhìn thấy tại vị trí GPS hiện tại:</p>
+        <div class="pin-sign-grid">
+          <button class="btn-sign-choice" data-speed="40"><span class="sign-circle">40</span><span class="sign-label">Đường hẹp</span></button>
+          <button class="btn-sign-choice" data-speed="50"><span class="sign-circle">50</span><span class="sign-label">Khu dân cư</span></button>
+          <button class="btn-sign-choice" data-speed="60"><span class="sign-circle">60</span><span class="sign-label">Đường đôi đô thị</span></button>
+          <button class="btn-sign-choice special-70" data-speed="70"><span class="sign-circle highlight-70">70</span><span class="sign-label">Đoạn nối / Dốc</span></button>
+          <button class="btn-sign-choice" data-speed="80"><span class="sign-circle">80</span><span class="sign-label">Ngoài đô thị</span></button>
+          <button class="btn-sign-choice" data-speed="90"><span class="sign-circle">90</span><span class="sign-label">QL1A dải cứng</span></button>
+          <button class="btn-sign-choice" data-speed="100"><span class="sign-circle">100</span><span class="sign-label">Cao tốc</span></button>
+          <button class="btn-sign-choice" data-speed="120"><span class="sign-circle">120</span><span class="sign-label">Cao tốc 120</span></button>
+        </div>
+        <div class="pin-note-box">
+          <input type="text" id="inputPinNote" placeholder="Ghi chú đoạn đường (ví dụ: Cầu Bến Hải, Dốc Miếu, Nút giao X)...">
+        </div>
+
+        <!-- Mục Báo Camera Phạt Nguội / Bắn Tốc Độ -->
+        <div class="pin-camera-section">
+          <div class="section-divider-title">📷 HOẶC BÁO CÓ CAMERA TẠI ĐÂY:</div>
+          <div class="pin-camera-grid">
+            <button class="btn-cam-choice" data-type="speed_camera" data-speed="50">📷 Bắn 50 km/h</button>
+            <button class="btn-cam-choice" data-type="speed_camera" data-speed="60">📷 Bắn 60 km/h</button>
+            <button class="btn-cam-choice" data-type="speed_camera" data-speed="70">📷 Bắn 70 km/h</button>
+            <button class="btn-cam-choice" data-type="speed_camera" data-speed="80">📷 Bắn 80 km/h</button>
+            <button class="btn-cam-choice" data-type="speed_camera" data-speed="90">📷 Bắn 90 km/h</button>
+            <button class="btn-cam-choice" data-type="red_light_camera" data-speed="50">🚦 Phạt Đèn Đỏ</button>
+          </div>
+        </div>
+
+        <div id="pinSignStatusMsg" class="pin-status-msg"></div>
+        <div class="pin-history-section">
+          <div class="pin-history-header">
+            <h4>Biển báo bạn đã ghim tại khu vực này:</h4>
+            <span id="pinCountBadge" class="pin-count-badge">0 biển</span>
+          </div>
+          <div id="pinnedSignsList" class="pinned-signs-list">
+            <div class="text-center text-muted">Chưa có biển ghim nào.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Cài đặt cấu hình -->
+  <div id="settingsModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2>⚙️ CẤU HÌNH CẢNH BÁO TỐC ĐỘ</h2>
+        <button class="modal-close" id="btnCloseSettings">&times;</button>
+      </div>
+      <div class="modal-body form-body">
+        <div class="form-group">
+          <label>Khoảng cảnh báo sớm trước ngưỡng (km/h):</label>
+          <input type="number" id="settingWarningBuffer" min="1" max="15" value="5">
+          <small class="hint">Ví dụ: Giới hạn 60 km/h, cảnh báo sớm từ 55 km/h.</small>
+        </div>
+        <div class="form-group-checkbox">
+          <label><input type="checkbox" id="settingVoiceAlert" checked> Bật giọng nói tiếng Việt cảnh báo</label>
+        </div>
+        <div class="form-group-checkbox">
+          <label><input type="checkbox" id="settingBeepAlert" checked> Bật tiếng bíp còi báo động</label>
+        </div>
+        <div class="form-group-checkbox">
+          <label><input type="checkbox" id="settingHighAccuracy" checked> Yêu cầu GPS độ chính xác cao (High Accuracy)</label>
+        </div>
+
+        <!-- Khối tích hợp VIETMAP Maps API v4 (Bản Quyền Việt Nam) -->
+        <div class="vietmap-api-config-card">
+          <div class="vietmap-api-header">
+            <span class="vietmap-badge">🇻🇳 VIETMAP Maps API v4</span>
+            <span class="vietmap-plan-tag">Bản Quyền Việt Nam</span>
+          </div>
+          <div class="form-group-checkbox">
+            <label><input type="checkbox" id="settingVietmapEnabled" checked> Ưu tiên nhận diện tên đường & tốc độ bằng VIETMAP API</label>
+          </div>
+          <div class="form-group">
+            <label>Vietmap API Key:</label>
+            <div class="input-with-action">
+              <input type="password" id="settingVietmapApiKey" value="273fdfe22a594029d71165bb3f672970532f97677b04d649" placeholder="Dán mã Vietmap API Key...">
+              <button type="button" id="btnToggleVietmapKeyVisibility" class="btn-toggle-vis" title="Ẩn/Hiện Key">👁️</button>
+              <button type="button" id="btnTestVietmapKey" class="btn-test-vietmap">⚡ Thử Kết Nối Vietmap</button>
+            </div>
+            <div id="vietmapKeyStatusMsg" class="vietmap-status-msg" style="display: none;"></div>
+            <small class="hint">Định vị chính xác 100% tên đường tiếng Việt và phân vùng Phường/Xã chuẩn Nghị định 30 theo CSDL giao thông Vietmap.</small>
+          </div>
+        </div>
+
+        <!-- Khối tích hợp HERE Technologies Speed Limits API (250k transactions/tháng) -->
+        <div class="here-api-config-card">
+          <div class="here-api-header">
+            <span class="here-badge">🌐 HERE Technologies API</span>
+            <span class="here-plan-tag">250.000 req/tháng Miễn Phí</span>
+          </div>
+          <div class="form-group-checkbox">
+            <label><input type="checkbox" id="settingHereEnabled" checked> Ưu tiên tra cứu tốc độ HERE Maps Online</label>
+          </div>
+          <div class="form-group">
+            <label>HERE Developer API Key:</label>
+            <div class="input-with-action">
+              <input type="password" id="settingHereApiKey" placeholder="Dán mã API Key tại đây...">
+              <button type="button" id="btnToggleKeyVisibility" class="btn-toggle-vis" title="Ẩn/Hiện Key">👁️</button>
+              <button type="button" id="btnTestHereKey" class="btn-test-here">⚡ Thử Kết Nối</button>
+            </div>
+            <div id="hereKeyStatusMsg" class="here-status-msg" style="display: none;"></div>
+            <small class="hint">Đăng ký API Key miễn phí tại <a href="https://developer.here.com/sign-up" target="_blank" rel="noopener">developer.here.com</a>. Khi mất mạng hoặc hết hạn mức, hệ thống tự động fallback sang CSDL Offline.</small>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button id="btnSaveSettings" class="btn-save">Lưu Cài Đặt</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Banner nhắc nhở Kích hoạt App độc lập khi mở trên trình duyệt điện thoại -->
+  <div id="mobileAppPromptBanner" class="mobile-app-prompt-banner" style="display: none;">
+    <div class="prompt-icon">🚗</div>
+    <div class="prompt-info">
+      <div class="prompt-title">KÍCH HOẠT CHẾ ĐỘ APP</div>
+      <div class="prompt-desc">Cài đặt để chạy toàn màn hình, chống tắt màn hình khi lái xe</div>
+    </div>
+    <button id="btnActivateApp" class="btn-activate-app">Kích Hoạt App</button>
+    <button id="btnDismissPrompt" class="btn-dismiss-prompt">&times;</button>
+  </div>
+
+  <!-- Modal hướng dẫn cài đặt App từng bước cho Android / iOS -->
+  <div id="installGuideModal" class="modal">
+    <div class="modal-content modal-guide">
+      <div class="modal-header">
+        <h2>📱 CÁCH KÍCH HOẠT APP TRÊN ĐIỆN THOẠI</h2>
+        <button class="modal-close" id="btnCloseInstallGuide">&times;</button>
+      </div>
+      <div class="modal-body guide-body">
+        <!-- Hướng dẫn cho Android -->
+        <div class="guide-platform-card android-card">
+          <div class="platform-header">
+            <span class="platform-badge">Android / Màn hình Ô tô</span>
+            <span class="browser-name">Trình duyệt Google Chrome</span>
+          </div>
+          <ol class="guide-steps">
+            <li>Nhấn vào biểu tượng <strong>3 chấm dọc ⋮</strong> ở góc trên bên phải Chrome.</li>
+            <li>Chọn mục <strong>"Cài đặt ứng dụng"</strong> hoặc <strong>"Thêm vào Màn hình chính"</strong>.</li>
+            <li>Xác nhận <strong>Cài đặt</strong>. Biểu tượng 🚗 <strong>Speed Guard</strong> sẽ nằm ngay màn hình chính.</li>
+            <li>Mở icon đó để chạy độc lập không có thanh địa chỉ!</li>
+          </ol>
+          <button id="btnNativeInstallPrompt" class="btn-action-install">BẤM VÀO ĐÂY ĐỂ CÀI ĐẶT NGAY</button>
+        </div>
+
+        <!-- Hướng dẫn cho iPhone / iOS -->
+        <div class="guide-platform-card ios-card">
+          <div class="platform-header">
+            <span class="platform-badge">iPhone / iPad</span>
+            <span class="browser-name">Trình duyệt Safari</span>
+          </div>
+          <ol class="guide-steps">
+            <li>Nhấn nút <strong>Chia sẻ (biểu tượng ô vuông có mũi tên chỉ lên)</strong> ở thanh dưới cùng.</li>
+            <li>Cuộn xuống danh sách và chọn <strong>"Thêm vào MH chính"</strong> (Add to Home Screen).</li>
+            <li>Bấm <strong>Thêm</strong> ở góc trên bên phải.</li>
+            <li>Mở icon <strong>Speed Guard</strong> từ màn hình chính để dùng như ứng dụng App Store!</li>
+          </ol>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Giả Lập Lộ Trình GPS Thử Nghiệm -->
+  <div id="gpsSimModal" class="modal-overlay">
+    <div class="modal-card" style="max-width: 580px;">
+      <div class="modal-header">
+        <h3 class="modal-title">🧪 GIẢ LẬP LỘ TRÌNH GPS THỬ NGHIỆM</h3>
+        <button id="btnCloseGpsSim" class="btn-close-modal">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 15px; line-height: 1.5;">
+          Chạm vào bất kỳ tuyến đường nào dưới đây để <strong>nạp tọa độ GPS tức thì</strong> vào ứng dụng. Kiểm tra trực quan xem <strong>biển báo giới hạn tốc độ</strong> có tự động đổi và phát giọng nói tiếng Việt chuẩn xác hay không:
+        </p>
+
+        <div id="simFeedbackMsg" style="font-size: 13px; font-weight: 700; color: #00e676; margin-bottom: 12px; min-height: 20px;"></div>
+
+        <div class="sim-routes-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow-y: auto;">
+          <button class="btn-sim-route" data-lat="16.820" data-lon="107.095" data-speed="45" data-title="Khu vực Phường Đông Hà" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: #fff; cursor: pointer; text-align: left;">
+            <div>
+              <div style="font-weight: 700; font-size: 14px;">🏢 Nội thị Phường Đông Hà</div>
+              <div style="font-size: 12px; color: #aaa;">Đường 2 chiều nội đô thông thường • 16.820°N, 107.095°E</div>
+            </div>
+            <span style="background: #fff; color: #d50000; border: 3px solid #d50000; border-radius: 50%; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 13px;">50</span>
+          </button>
+
+          <button class="btn-sim-route" data-lat="16.800" data-lon="107.135" data-speed="58" data-title="Tuyến tránh Quốc lộ 1A Đông Hà" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: #fff; cursor: pointer; text-align: left;">
+            <div>
+              <div style="font-weight: 700; font-size: 14px;">🛣️ Tuyến tránh Quốc lộ 1A Đông Hà</div>
+              <div style="font-size: 12px; color: #aaa;">Đường tránh ngoài vành đai phía Đông • 16.800°N, 107.135°E</div>
+            </div>
+            <span style="background: #fff; color: #d50000; border: 3px solid #d50000; border-radius: 50%; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 13px;">60</span>
+          </button>
+
+          <button class="btn-sim-route" data-lat="16.905" data-lon="107.090" data-speed="68" data-title="QL1A - Tiếp cận Dốc Miếu (Quảng Trị)" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: #fff; cursor: pointer; text-align: left;">
+            <div>
+              <div style="font-weight: 700; font-size: 14px;">⚠️ QL1A - Dốc Miếu (Quảng Trị)</div>
+              <div style="font-size: 12px; color: #aaa;">Đoạn dốc quanh co hạn chế 70 km/h • 16.905°N, 107.090°E</div>
+            </div>
+            <span style="background: #fff; color: #d50000; border: 3px solid #d50000; border-radius: 50%; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 13px;">70</span>
+          </button>
+
+          <button class="btn-sim-route" data-lat="16.772" data-lon="107.120" data-speed="67" data-title="QL1A - Nút giao Tránh Nam Đông Hà" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: #fff; cursor: pointer; text-align: left;">
+            <div>
+              <div style="font-weight: 700; font-size: 14px;">⚠️ QL1A - Nút giao Tránh Nam Đông Hà</div>
+              <div style="font-size: 12px; color: #aaa;">Đoạn giảm tốc trước cửa ngõ phía Nam • 16.772°N, 107.120°E</div>
+            </div>
+            <span style="background: #fff; color: #d50000; border: 3px solid #d50000; border-radius: 50%; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 13px;">70</span>
+          </button>
+
+          <button class="btn-sim-route" data-lat="16.780" data-lon="106.950" data-speed="76" data-title="Quốc lộ 9 (Cam Lộ đi Xã Lao Bảo)" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: #fff; cursor: pointer; text-align: left;">
+            <div>
+              <div style="font-weight: 700; font-size: 14px;">🚗 Quốc lộ 9 (Cam Lộ đi Xã Lao Bảo)</div>
+              <div style="font-size: 12px; color: #aaa;">Đường 2 chiều ngoài đô thị • 16.780°N, 106.950°E</div>
+            </div>
+            <span style="background: #fff; color: #d50000; border: 3px solid #d50000; border-radius: 50%; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 13px;">80</span>
+          </button>
+
+          <button class="btn-sim-route" data-lat="16.980" data-lon="107.065" data-speed="85" data-title="Quốc lộ 1A (Gio Linh đi Vĩnh Linh)" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: #fff; cursor: pointer; text-align: left;">
+            <div>
+              <div style="font-weight: 700; font-size: 14px;">🚗 Quốc lộ 1A (Gio Linh đi Vĩnh Linh)</div>
+              <div style="font-size: 12px; color: #aaa;">Đường đôi có dải phân cách giữa • 16.980°N, 107.065°E</div>
+            </div>
+            <span style="background: #fff; color: #d50000; border: 3px solid #d50000; border-radius: 50%; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 13px;">90</span>
+          </button>
+
+          <button class="btn-sim-route" data-lat="16.550" data-lon="107.350" data-speed="96" data-title="Cao tốc Cam Lộ - La Sơn" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: #fff; cursor: pointer; text-align: left;">
+            <div>
+              <div style="font-weight: 700; font-size: 14px;">🚀 Cao tốc Cam Lộ - La Sơn</div>
+              <div style="font-size: 12px; color: #aaa;">Cao tốc Bắc - Nam nhánh Quảng Trị - Huế • 16.550°N, 107.350°E</div>
+            </div>
+            <span style="background: #fff; color: #d50000; border: 3px solid #d50000; border-radius: 50%; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 13px;">100</span>
+          </button>
+
+          <button class="btn-sim-route" data-lat="15.750" data-lon="108.450" data-speed="115" data-title="Cao tốc Đà Nẵng - Quảng Ngãi" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 8px; color: #fff; cursor: pointer; text-align: left;">
+            <div>
+              <div style="font-weight: 700; font-size: 14px;">🚀 Cao tốc Đà Nẵng - Quảng Ngãi</div>
+              <div style="font-size: 12px; color: #aaa;">Cao tốc tiêu chuẩn cao 120 km/h • 15.750°N, 108.450°E</div>
+            </div>
+            <span style="background: #fff; color: #d50000; border: 3px solid #d50000; border-radius: 50%; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 13px;">120</span>
+          </button>
+
+          <button class="btn-sim-route" data-lat="16.896" data-lon="107.093" data-speed="72" data-title="Tiếp cận Camera Dốc Miếu" style="display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; background: rgba(255,23,68,0.15); border: 1px solid rgba(255,23,68,0.4); border-radius: 8px; color: #fff; cursor: pointer; text-align: left;">
+            <div>
+              <div style="font-weight: 700; font-size: 14px; color: #ff5252;">📷 Tiếp Cận Camera Phạt Nguội Dốc Miếu</div>
+              <div style="font-size: 12px; color: #ff8a80;">Cự ly ~450m tới chốt camera bắn tốc độ 70 km/h • 16.896°N, 107.093°E</div>
+            </div>
+            <span style="background: #d50000; color: #fff; border-radius: 50%; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 16px;">🚨</span>
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="speed_cameras_data.js"></script>
+  <script src="speed_engine.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

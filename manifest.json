@@ -1,0 +1,24 @@
+{
+  "name": "Car Speed Guard-XIP - C?nh B?o T?c ?? ? T?",
+  "short_name": "Speed Guard-XIP",
+  "description": "Ph?n m?m c?nh b?o gi?i h?n t?c ?? v? ??nh v? GPS ? t? th?i gian th?c. Ph?t tri?n b?i L? Vi?t D?ng (S?T: 0983890250).",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#07090e",
+  "theme_color": "#07090e",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

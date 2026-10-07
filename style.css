@@ -1,0 +1,1672 @@
+/* ==============================================================================
+   CAR SPEED GUARD - STYLESHEET
+   Thiết kế giao diện Dark Mode / OLED công thái học dành cho khoang lái ô tô.
+   Tuân thủ triệt để Luật 17/09/2026: min-width: 0 chống tràn Flexbox, max-height: 60vh.
+   ============================================================================== */
+
+:root {
+  --bg-color: #07090e;
+  --surface-color: #121722;
+  --surface-border: #1e2638;
+  --text-main: #f0f4f8;
+  --text-muted: #8292a8;
+  --safe-green: #00e676;
+  --safe-glow: rgba(0, 230, 118, 0.4);
+  --warn-orange: #ff9100;
+  --warn-glow: rgba(255, 145, 0, 0.4);
+  --danger-red: #ff1744;
+  --danger-glow: rgba(255, 23, 68, 0.6);
+  --neon-cyan: #00e5ff;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body.dashboard-body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow-x: hidden;
+  user-select: none;
+}
+
+/* Toàn bộ container chính */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: env(safe-area-inset-top, 12px) env(safe-area-inset-right, 16px) env(safe-area-inset-bottom, 12px) env(safe-area-inset-left, 16px);
+  min-width: 0; /* Chống tràn Flexbox */
+}
+
+/* Cảnh báo viền nhấp nháy đỏ khi vượt tốc độ */
+.alert-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 999;
+  border: 12px solid var(--danger-red);
+  opacity: 0;
+  box-shadow: inset 0 0 60px var(--danger-glow);
+  transition: opacity 0.15s ease-in-out;
+}
+
+.alert-overlay.flashing {
+  animation: flashDanger 0.4s infinite alternate;
+}
+
+@keyframes flashDanger {
+  0% { opacity: 0; }
+  100% { opacity: 0.9; }
+}
+
+/* Thanh Header */
+.car-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--surface-color);
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--surface-border);
+  min-width: 0;
+  gap: 12px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.car-icon {
+  font-size: 24px;
+}
+
+.app-title {
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: 1px;
+  color: var(--neon-cyan);
+  white-space: nowrap;
+}
+
+.status-badge {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 20px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge-searching {
+  background-color: rgba(255, 145, 0, 0.15);
+  color: var(--warn-orange);
+  border: 1px solid var(--warn-orange);
+}
+
+.badge-active {
+  background-color: rgba(0, 230, 118, 0.15);
+  color: var(--safe-green);
+  border: 1px solid var(--safe-green);
+}
+
+.badge-sim {
+  background-color: rgba(0, 229, 255, 0.15);
+  color: var(--neon-cyan);
+  border: 1px solid var(--neon-cyan);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.clock-display {
+  font-size: 15px;
+  font-weight: 700;
+  font-family: monospace;
+  color: var(--text-muted);
+}
+
+.btn-action {
+  background-color: #1a2233;
+  color: var(--text-main);
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.2s;
+}
+
+.btn-action:hover {
+  background-color: #242f47;
+}
+
+.btn-hud.active {
+  background-color: #2e1a47;
+  color: #d175ff;
+  border-color: #9c27b0;
+  box-shadow: 0 0 10px rgba(156, 39, 176, 0.4);
+}
+
+.btn-sound.active {
+  color: var(--safe-green);
+}
+
+/* Khu vực hiển thị chính (Main Dashboard) */
+.dashboard-main {
+  flex: 1;
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  gap: 20px;
+  padding: 16px 0;
+  min-width: 0;
+}
+
+/* Đồng hồ tốc độ (Speed Cluster - Thu nhỏ tinh gọn) */
+.speed-cluster {
+  flex: 0 0 200px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  min-width: 0;
+  background-color: var(--surface-color);
+  padding: 14px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--surface-border);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.speed-circle-wrapper {
+  position: relative;
+  width: 170px;
+  height: 170px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.speed-gauge-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.gauge-bg {
+  fill: none;
+  stroke: #161d2b;
+  stroke-width: 10;
+}
+
+.gauge-bar {
+  fill: none;
+  stroke: var(--safe-green);
+  stroke-width: 12;
+  stroke-linecap: round;
+  stroke-dasharray: 534; /* 2 * PI * 85 */
+  stroke-dashoffset: 534;
+  transition: stroke-dashoffset 0.3s ease, stroke 0.3s ease, filter 0.3s ease;
+  filter: drop-shadow(0 0 8px var(--safe-glow));
+}
+
+.speed-value-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 2;
+}
+
+.current-speed {
+  font-size: 60px;
+  font-weight: 900;
+  line-height: 0.9;
+  letter-spacing: -1px;
+  font-family: "Impact", "Arial Black", sans-serif;
+  color: var(--safe-green);
+  text-shadow: 0 0 15px var(--safe-glow);
+  transition: color 0.3s, text-shadow 0.3s;
+}
+
+.speed-unit {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 2px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.speed-status-text {
+  margin-top: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 3px 12px;
+  border-radius: 12px;
+  background-color: rgba(0, 230, 118, 0.15);
+  color: var(--safe-green);
+  letter-spacing: 1px;
+}
+
+.geo-info-bar {
+  display: flex;
+  gap: 16px;
+  margin-top: 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+  background-color: rgba(18, 23, 34, 0.7);
+  padding: 6px 14px;
+  border-radius: 20px;
+}
+
+/* Biển báo giới hạn tốc độ chuẩn Việt Nam (Thu nhỏ tinh gọn, 100% Tự động) */
+.limit-cluster {
+  flex: 0 0 170px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  background-color: var(--surface-color);
+  padding: 14px 12px;
+  border-radius: 16px;
+  border: 1px solid var(--surface-border);
+  min-width: 0;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.auto-gps-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background-color: rgba(0, 229, 255, 0.12);
+  border: 1px solid rgba(0, 229, 255, 0.4);
+  border-radius: 12px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--neon-cyan);
+  letter-spacing: 0.5px;
+}
+
+.live-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background-color: var(--safe-green);
+  box-shadow: 0 0 8px var(--safe-green);
+  animation: pulseDot 1.2s infinite;
+}
+
+/* Badge hiển thị tên đoạn đường đang chạy */
+.detected-road-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--neon-cyan);
+  background-color: rgba(0, 229, 255, 0.08);
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  border-radius: 12px;
+  padding: 4px 8px;
+  max-width: 100%;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.limit-sign-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ==============================================================================
+   CỘT BẢN ĐỒ ĐỊNH VỊ XE TRỰC TIẾP (LIVE GPS CAR MAP - PHÓNG TO CHIẾM ƯU THẾ)
+   ============================================================================== */
+.map-cluster {
+  flex: 2.2; /* Phóng to bản đồ chiếm ưu thế tối đa */
+  min-width: 0; /* Tuân thủ Luật 17/09/2026: Chống tràn Flexbox */
+  background-color: var(--surface-color);
+  border: 1px solid var(--surface-border);
+  border-radius: 16px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  height: 480px; /* Tăng chiều cao bản đồ */
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+}
+
+.map-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 14px;
+  background-color: #121824;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.map-title-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.map-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #00e676;
+  box-shadow: 0 0 8px #00e676;
+  animation: pulseDot 1.5s infinite;
+}
+
+@keyframes pulseDot {
+  0% { transform: scale(0.9); opacity: 0.7; }
+  50% { transform: scale(1.3); opacity: 1; }
+  100% { transform: scale(0.9); opacity: 0.7; }
+}
+
+.map-title {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--neon-cyan);
+}
+
+.map-header-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.map-source-select {
+  background-color: #1a2233;
+  color: var(--neon-cyan);
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  outline: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.map-source-select:hover {
+  background-color: #26334d;
+  border-color: var(--neon-cyan);
+}
+
+.btn-map-tool {
+  background-color: #1a2233;
+  color: var(--text-muted);
+  border: 1px solid var(--surface-border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-map-tool:hover {
+  background-color: #26334d;
+}
+
+.btn-map-tool.active {
+  background-color: var(--neon-cyan);
+  color: #07090e;
+  border-color: var(--neon-cyan);
+}
+
+.car-live-map {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  min-height: 250px;
+  background-color: #0b0e14;
+  z-index: 1;
+}
+
+.map-footer-coords {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 14px;
+  background-color: #121824;
+  border-top: 1px solid var(--surface-border);
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+#mapRoadBadge {
+  font-weight: 700;
+  color: var(--text-main);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+
+#mapCoordsBadge {
+  font-family: monospace;
+}
+
+/* Biểu tượng xe ô tô trên bản đồ với hiệu ứng Radar Pulse */
+.custom-car-marker {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.car-symbol {
+  font-size: 24px;
+  z-index: 2;
+  filter: drop-shadow(0 2px 6px rgba(0,0,0,0.8));
+  transition: transform 0.3s ease;
+}
+
+.car-pulse {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background-color: rgba(0, 229, 255, 0.25);
+  border: 2px solid var(--neon-cyan);
+  animation: radarWave 2s infinite ease-out;
+  z-index: 1;
+}
+
+@keyframes radarWave {
+  0% { transform: scale(0.6); opacity: 1; }
+  100% { transform: scale(1.8); opacity: 0; }
+}
+
+/* Chế độ Mở Rộng Bản Đồ Toàn Màn Hình */
+body.map-expanded .speed-cluster,
+body.map-expanded .limit-cluster {
+  display: none !important;
+}
+
+body.map-expanded .map-cluster {
+  height: calc(100vh - 200px);
+  width: 100%;
+}
+
+
+.vietnam-speed-sign {
+  width: 95px;
+  height: 95px;
+  background-color: #ffffff;
+  border: 11px solid #d32f2f; /* Viền đỏ chuẩn biển báo VN */
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-shadow: 0 0 16px rgba(211, 47, 47, 0.4), inset 0 0 4px rgba(0,0,0,0.2);
+  transition: transform 0.2s;
+}
+
+.vietnam-speed-sign:hover {
+  transform: scale(1.05);
+}
+
+.sign-inner-circle {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.sign-number {
+  color: #111111; /* Chữ số đen tuyền */
+  font-size: 44px;
+  font-weight: 900;
+  font-family: "Arial Black", Impact, sans-serif;
+  line-height: 1;
+  letter-spacing: -1px;
+}
+
+.sign-caption {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+}
+
+/* Khối thông tin liên hệ tác giả Lê Viết Dũng */
+.author-contact-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  background: rgba(14, 20, 32, 0.85);
+  border: 1px solid var(--surface-border);
+  border-radius: 10px;
+  padding: 8px 16px;
+  margin-top: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.author-contact-bar strong {
+  color: var(--neon-cyan);
+}
+
+.author-details {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.author-details a {
+  color: var(--safe-green);
+  text-decoration: none;
+  font-weight: 700;
+}
+
+.author-details a:hover {
+  text-decoration: underline;
+}
+
+
+/* Thanh thống kê chuyến đi (Trip Summary) */
+.trip-summary-bar {
+  display: flex;
+  background-color: var(--surface-color);
+  border: 1px solid var(--surface-border);
+  border-radius: 12px;
+  padding: 12px 16px;
+  gap: 16px;
+  align-items: center;
+  min-width: 0;
+}
+
+.stat-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.stat-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.stat-val {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--text-main);
+  white-space: nowrap;
+}
+
+.stat-val small {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.stat-alert .stat-val {
+  color: var(--danger-red);
+}
+
+.stat-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-trip {
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.2s;
+}
+
+.btn-trip-start {
+  background-color: var(--safe-green);
+  color: #07090e;
+}
+
+.btn-trip-start.active {
+  background-color: #d32f2f;
+  color: #ffffff;
+}
+
+.btn-trip-history {
+  background-color: #1e2638;
+  color: var(--text-main);
+  border: 1px solid var(--surface-border);
+}
+
+/* ==============================================================================
+   CHẾ ĐỘ HUD (HEAD-UP DISPLAY) - CHIẾU LÊN KÍNH LÁI BAN ĐÊM
+   ============================================================================== */
+body.hud-active {
+  background-color: #000000 !important;
+}
+
+body.hud-active .car-header,
+body.hud-active .simulation-banner,
+body.hud-active .trip-summary-bar,
+body.hud-active .geo-info-bar,
+body.hud-active .speed-presets,
+body.hud-active .manual-adjust-group,
+body.hud-active .sign-caption {
+  display: none !important;
+}
+
+body.hud-active .dashboard-main {
+  transform: scaleY(-1); /* Lật ngược theo trục Y để kính lái phản chiếu xuôi lại mắt tài xế */
+  height: 100vh;
+  padding: 0;
+}
+
+body.hud-active .limit-cluster {
+  background: transparent;
+  border: none;
+}
+
+body.hud-active .current-speed {
+  font-size: 140px;
+}
+
+/* Nút thoát HUD nhanh khi đang ở chế độ HUD */
+body.hud-active::before {
+  content: "Bấm bất kỳ đâu để thoát chế độ HUD";
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #666;
+  font-size: 12px;
+  z-index: 1000;
+}
+
+/* ==============================================================================
+   MODAL & BẢNG DỮ LIỆU (TUÂN THỦ min-width: 0 và max-height: 60vh)
+   ============================================================================== */
+.modal {
+  display: none;
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.85);
+  z-index: 2000;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+}
+
+.modal.show {
+  display: flex;
+}
+
+.modal-content {
+  background-color: var(--surface-color);
+  border: 1px solid var(--surface-border);
+  border-radius: 16px;
+  width: 100%;
+  max-width: 800px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.6);
+  min-width: 0; /* Chống tràn Flexbox */
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--surface-border);
+}
+
+.modal-header h2 {
+  font-size: 16px;
+  color: var(--neon-cyan);
+}
+
+.modal-close {
+  background: transparent;
+  border: none;
+  color: var(--text-muted);
+  font-size: 26px;
+  cursor: pointer;
+}
+
+.modal-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.tab-btn {
+  background-color: #1a2233;
+  color: var(--text-muted);
+  border: 1px solid var(--surface-border);
+  padding: 8px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tab-btn.active {
+  background-color: var(--neon-cyan);
+  color: #07090e;
+  border-color: var(--neon-cyan);
+}
+
+.tab-content {
+  display: none;
+  min-width: 0;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+/* Vùng cuộn bảng dữ liệu nội bộ - Luật 17/09/2026: max-height: 60vh */
+.table-scroll-container {
+  max-height: 60vh;
+  overflow-y: auto;
+  border: 1px solid var(--surface-border);
+  border-radius: 8px;
+  min-width: 0;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.data-table th, .data-table td {
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--surface-border);
+  white-space: nowrap;
+}
+
+.data-table th {
+  background-color: #161d2b;
+  color: var(--text-muted);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.data-table tr:hover {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+
+.text-center {
+  text-align: center;
+  color: var(--text-muted);
+  padding: 30px !important;
+}
+
+/* Form cài đặt */
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 6px;
+  color: var(--text-main);
+}
+
+.form-group input[type="number"] {
+  width: 100%;
+  background-color: #1a2233;
+  border: 1px solid var(--surface-border);
+  color: var(--text-main);
+  padding: 10px;
+  border-radius: 8px;
+  font-size: 15px;
+}
+
+.form-group .hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 4px;
+  display: block;
+}
+
+.form-group-checkbox {
+  margin-bottom: 14px;
+  font-size: 14px;
+}
+
+.form-group-checkbox label {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modal-footer {
+  margin-top: 16px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn-save {
+  background-color: var(--safe-green);
+  color: #07090e;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ==============================================================================
+   RESPONSIVE DESIGN (MÀN HÌNH ĐIỆN THOẠI & TAPLO Ô TÔ XOAY NGANG)
+   ============================================================================== */
+@media (max-width: 768px) {
+  .dashboard-main {
+    flex-direction: column;
+    gap: 14px;
+    padding: 10px 0;
+  }
+
+  .speed-cluster {
+    flex: none;
+    width: 100%;
+  }
+
+  .speed-circle-wrapper {
+    width: 150px;
+    height: 150px;
+  }
+
+  .current-speed {
+    font-size: 50px;
+  }
+
+  .limit-cluster {
+    flex: none;
+    width: 100%;
+    padding: 12px;
+  }
+
+  .map-cluster {
+    height: 350px;
+  }
+
+  .trip-summary-bar {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+
+  .stat-card {
+    flex: 1 1 30%;
+  }
+
+  .stat-actions {
+    width: 100%;
+    justify-content: stretch;
+  }
+
+  .btn-trip {
+    flex: 1;
+  }
+}
+
+/* ==============================================================================
+   MOBILE APP BANNER & INSTALL GUIDE (KÍCH HOẠT CHẾ ĐỘ APP CHO DI ĐỘNG)
+   ============================================================================== */
+.mobile-app-prompt-banner {
+  position: fixed;
+  top: 10px;
+  left: 12px;
+  right: 12px;
+  max-width: 600px;
+  margin: 0 auto;
+  background: linear-gradient(135deg, #162238, #0e1726);
+  border: 1.5px solid var(--neon-cyan);
+  border-radius: 12px;
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  z-index: 1000;
+  box-shadow: 0 8px 30px rgba(0, 229, 255, 0.25);
+  animation: slideDownBanner 0.4s ease-out;
+}
+
+@keyframes slideDownBanner {
+  from { transform: translateY(-100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.prompt-icon {
+  font-size: 26px;
+  flex-shrink: 0;
+}
+
+.prompt-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.prompt-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--neon-cyan);
+  letter-spacing: 0.5px;
+}
+
+.prompt-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.btn-activate-app {
+  background-color: var(--neon-cyan);
+  color: #07090e;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.15s;
+}
+
+.btn-activate-app:active {
+  transform: scale(0.95);
+}
+
+.btn-dismiss-prompt {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 20px;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+/* Modal Guide */
+.modal-guide {
+  max-width: 550px;
+}
+
+.guide-body {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  max-height: 60vh; /* Tuân thủ Luật 17/09/2026 */
+  overflow-y: auto;
+}
+
+.guide-platform-card {
+  background-color: #0e1420;
+  border: 1px solid var(--surface-border);
+  border-radius: 10px;
+  padding: 14px;
+}
+
+.guide-platform-card.android-card {
+  border-left: 4px solid var(--safe-green);
+}
+
+.guide-platform-card.ios-card {
+  border-left: 4px solid var(--neon-cyan);
+}
+
+.platform-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.platform-badge {
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--text-main);
+}
+
+.browser-name {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.guide-steps {
+  padding-left: 18px;
+  font-size: 12px;
+  color: #cfd8dc;
+  line-height: 1.6;
+}
+
+.guide-steps li {
+  margin-bottom: 6px;
+}
+
+.btn-action-install {
+  width: 100%;
+  margin-top: 10px;
+  background: linear-gradient(90deg, #00e676, #00b0ff);
+  color: #07090e;
+  border: none;
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  letter-spacing: 0.5px;
+  box-shadow: 0 4px 15px rgba(0, 230, 118, 0.3);
+}
+
+.btn-action-install:active {
+  transform: scale(0.98);
+}
+
+/* ==============================================================================
+   MÀN HÌNH KHÓA AN NINH (SECURITY GATE - CHẾ ĐỘ RIÊNG TƯ ONLY)
+   ============================================================================== */
+.security-gate-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: #07090e;
+  z-index: 10000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.security-gate-overlay.unlocked {
+  display: none !important;
+}
+
+.security-card {
+  background: #121722;
+  border: 1px solid #1e2638;
+  border-radius: 16px;
+  width: 100%;
+  max-width: 420px;
+  padding: 28px 24px;
+  text-align: center;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 229, 255, 0.15);
+  box-sizing: border-box;
+}
+
+.security-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+  animation: pulseLock 2s infinite ease-in-out;
+}
+
+@keyframes pulseLock {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+.security-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--neon-cyan);
+  letter-spacing: 1px;
+  margin-bottom: 4px;
+}
+
+.security-subtitle {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 18px;
+}
+
+.security-notice {
+  font-size: 13px;
+  color: #cfd8dc;
+  line-height: 1.5;
+  background: rgba(255, 145, 0, 0.1);
+  border: 1px solid rgba(255, 145, 0, 0.3);
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 20px;
+}
+
+.security-input-box {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.security-input-box input {
+  flex: 1;
+  background: #090c13;
+  border: 1px solid #2a354d;
+  border-radius: 8px;
+  padding: 12px 14px;
+  color: #fff;
+  font-size: 16px;
+  outline: none;
+  text-align: center;
+  letter-spacing: 3px;
+  font-weight: 700;
+}
+
+.security-input-box input:focus {
+  border-color: var(--neon-cyan);
+  box-shadow: 0 0 10px rgba(0, 229, 255, 0.3);
+}
+
+.btn-unlock {
+  background: linear-gradient(135deg, #00e5ff, #00b0ff);
+  color: #07090e;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 18px;
+  font-weight: 800;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: transform 0.1s;
+}
+
+.btn-unlock:active {
+  transform: scale(0.96);
+}
+
+.security-error {
+  min-height: 20px;
+  font-size: 12px;
+  color: var(--danger-red);
+  font-weight: 600;
+  margin-bottom: 16px;
+}
+
+.security-contact {
+  font-size: 12px;
+  color: var(--text-muted);
+  border-top: 1px solid #1e2638;
+  padding-top: 14px;
+}
+
+.security-contact strong {
+  color: #fff;
+}
+
+/* ==============================================================================
+   TÍNH NĂNG GHIM BIỂN BÁO TỐC ĐỘ 1 CHẠM (CROWDSOURCE / CUSTOM PINNED SIGNS)
+   ============================================================================== */
+.btn-pin-sign {
+  background: rgba(0, 229, 255, 0.12);
+  border: 1px solid var(--neon-cyan);
+  color: var(--neon-cyan);
+}
+
+.btn-pin-sign:hover, .btn-pin-sign:active {
+  background: rgba(0, 229, 255, 0.25);
+  box-shadow: 0 0 12px rgba(0, 229, 255, 0.4);
+}
+
+.btn-quick-pin {
+  margin-top: 10px;
+  background: linear-gradient(135deg, rgba(255, 145, 0, 0.15), rgba(255, 23, 68, 0.15));
+  border: 1px dashed var(--warn-orange);
+  color: #ffb74d;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 20px;
+  cursor: pointer;
+  display: inline-block;
+  transition: all 0.2s ease;
+  width: 100%;
+  max-width: 180px;
+  text-align: center;
+}
+
+.btn-quick-pin:active {
+  transform: scale(0.96);
+  background: rgba(255, 145, 0, 0.3);
+  border-style: solid;
+}
+
+.modal-pin-sign {
+  max-width: 500px;
+}
+
+.pin-sign-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.pin-hint {
+  font-size: 13px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.pin-sign-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  min-width: 0;
+}
+
+.btn-sign-choice {
+  background: #141a29;
+  border: 1px solid #222d42;
+  border-radius: 12px;
+  padding: 10px 4px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-sign-choice:active {
+  transform: scale(0.92);
+  background: #1e2840;
+  border-color: var(--neon-cyan);
+}
+
+.btn-sign-choice .sign-circle {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: #fff;
+  border: 5px solid #ff1744;
+  color: #000;
+  font-weight: 900;
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+}
+
+.btn-sign-choice .sign-circle.highlight-70 {
+  border-color: #ff9100;
+  background: #fffdf0;
+  box-shadow: 0 0 12px rgba(255, 145, 0, 0.6);
+}
+
+.btn-sign-choice.special-70 {
+  border-color: rgba(255, 145, 0, 0.4);
+  background: rgba(255, 145, 0, 0.08);
+}
+
+.btn-sign-choice .sign-label {
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.pin-note-box input {
+  width: 100%;
+  background: #090d15;
+  border: 1px solid #222d42;
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: #fff;
+  font-size: 13px;
+  outline: none;
+  box-sizing: border-box;
+}
+
+.pin-note-box input:focus {
+  border-color: var(--neon-cyan);
+}
+
+.pin-status-msg {
+  min-height: 18px;
+  font-size: 12px;
+  text-align: center;
+  font-weight: 600;
+}
+
+.pin-history-section {
+  border-top: 1px solid var(--surface-border);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pin-history-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.pin-history-header h4 {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.pin-count-badge {
+  font-size: 11px;
+  background: #1e2638;
+  padding: 2px 8px;
+  border-radius: 12px;
+  color: var(--neon-cyan);
+}
+
+.pinned-signs-list {
+  max-height: 35vh; /* Tuân thủ Luật 17/09/2026: max-height: 60vh */
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pinned-sign-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #0d121c;
+  border: 1px solid #1c2538;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+.pinned-sign-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.mini-sign-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #fff;
+  border: 3px solid #ff1744;
+  color: #000;
+  font-weight: 900;
+  font-size: 12px;
+}
+
+.pinned-sign-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.pinned-sign-title {
+  color: #fff;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pinned-sign-meta {
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.btn-del-sign {
+  background: none;
+  border: none;
+  color: var(--danger-red);
+  cursor: pointer;
+  font-size: 14px;
+  padding: 4px 6px;
+  border-radius: 4px;
+}
+
+.btn-del-sign:hover {
+  background: rgba(255, 23, 68, 0.15);
+}
+
+/* HERE Technologies API Settings */
+.here-api-config-card {
+  margin-top: 14px;
+  background: rgba(0, 229, 255, 0.04);
+  border: 1px solid rgba(0, 229, 255, 0.25);
+  border-radius: 12px;
+  padding: 14px 16px;
+  min-width: 0;
+}
+
+.here-api-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.here-badge {
+  background: rgba(0, 229, 255, 0.15);
+  color: var(--neon-cyan);
+  font-weight: 800;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  letter-spacing: 0.5px;
+}
+
+.here-plan-tag {
+  background: rgba(0, 230, 118, 0.15);
+  color: var(--safe-green);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.input-with-action {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.input-with-action input {
+  flex: 1;
+  min-width: 0;
+}
+
+.btn-toggle-vis {
+  background: var(--surface-border);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: var(--text-main);
+  padding: 8px 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.btn-test-here {
+  background: linear-gradient(135deg, #00b4d8, #0077b6);
+  border: none;
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.btn-test-here:hover {
+  filter: brightness(1.15);
+  transform: translateY(-1px);
+}
+
+.btn-test-here:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.here-status-msg {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.here-status-msg.success {
+  background: rgba(0, 230, 118, 0.15);
+  border: 1px solid var(--safe-green);
+  color: var(--safe-green);
+}
+
+.here-status-msg.error {
+  background: rgba(255, 23, 68, 0.15);
+  border: 1px solid var(--danger-red);
+  color: var(--danger-red);
+}
+
+/* VIETMAP Maps API v4 Settings */
+.vietmap-api-config-card {
+  margin-top: 14px;
+  background: rgba(229, 57, 53, 0.05);
+  border: 1px solid rgba(229, 57, 53, 0.3);
+  border-radius: 12px;
+  padding: 14px 16px;
+  min-width: 0;
+}
+
+.vietmap-api-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.vietmap-badge {
+  background: rgba(229, 57, 53, 0.2);
+  color: #ff5252;
+  font-weight: 800;
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  letter-spacing: 0.5px;
+}
+
+.vietmap-plan-tag {
+  background: rgba(255, 193, 7, 0.15);
+  color: #ffd54f;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.btn-test-vietmap {
+  background: linear-gradient(135deg, #e53935, #c2185b);
+  border: none;
+  color: #fff;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+}
+
+.btn-test-vietmap:hover {
+  filter: brightness(1.15);
+  transform: translateY(-1px);
+}
+
+.btn-test-vietmap:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.vietmap-status-msg {
+  margin-top: 8px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.vietmap-status-msg.success {
+  background: rgba(0, 230, 118, 0.15);
+  border: 1px solid var(--safe-green);
+  color: var(--safe-green);
+}
+
+.vietmap-status-msg.error {
+  background: rgba(255, 23, 68, 0.15);
+  border: 1px solid var(--danger-red);
+  color: var(--danger-red);
+}
+
+
+
